@@ -45,10 +45,13 @@ export default function QuickReference() {
           </div>
         )}
         {filteredData.map((row, i) => {
-          if (row['Parameter / Test'].includes('MAINTENANCE /') || row['Parameter / Test'].includes('ESTER OIL') || row['Parameter / Test'].includes('EXPORT /')) {
+          // Detect if it is a section header (no data in standard columns)
+          const isHeader = !row['IEC'] && !row['ASTM'] && !row['ISO / Other'];
+          
+          if (isHeader) {
              return (
                <div key={i} style={{ gridColumn: '1 / -1', marginTop: '24px', borderBottom: '2px solid var(--sdo-iec)' }}>
-                 <h3 style={{ color: 'var(--sdo-iec)', fontSize: '1.25rem' }}>{row['Parameter / Test']}</h3>
+                 <h3 style={{ color: 'var(--sdo-iec)', fontSize: '1.25rem' }}>{row['Parameter / Test'].trim()}</h3>
                </div>
              )
           }
