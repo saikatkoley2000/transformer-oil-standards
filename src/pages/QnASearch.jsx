@@ -9,11 +9,16 @@ export default function QnASearch() {
 
   // Stop words to filter out common conversational words from query
   const stopWords = new Set(['what', 'is', 'the', 'for', 'in', 'of', 'and', 'to', 'a', 'an', 'how', 'do', 'i', 'find', 'which', 'standard', 'are', 'about', 'can', 'you', 'tell', 'me']);
+  
+  // High-value keywords that should heavily influence results
+  const primaryKeywords = new Set(['synthetic', 'natural', 'mineral', 'bdv', 'dga', 'ift', 'acidity', 'viscosity', 'water', 'moisture', 'flash', 'fire', 'pour', 'density', 'gassing', 'pcb', 'sulphur']);
+  const genericKeywords = new Set(['test', 'method', 'oil', 'fluid', 'liquid', 'equipment', 'transformer']);
 
   const searchResults = useMemo(() => {
     if (!query.trim()) return [];
 
-    const rawKeywords = query.toLowerCase().split(/[\s,?\.]+/);
+    const rawQuery = query.toLowerCase();
+    const rawKeywords = rawQuery.split(/[\s,?\.]+/);
     const keywords = rawKeywords.filter(k => k.length > 2 && !stopWords.has(k));
 
     if (keywords.length === 0) return [];
@@ -26,32 +31,78 @@ export default function QnASearch() {
       const scope = (row['Scope / Key Parameter'] || '').toLowerCase();
       const notes = (row['Notes / Applicability'] || '').toLowerCase();
       const engDesc = (row['Engineering Description'] || '').toLowerCase();
+      const topic = (row['Topic Category'] || '').toLowerCase();
       
-      const combinedText = `${stdNo} ${stdDoc} ${scope} ${notes} ${engDesc}`;
+      const combinedText = `${stdNo} ${stdDoc} ${topic} ${scope} ${notes} ${engDesc}`;
 
+      // 1. Fluid Type Strictness (Massive boost for exact fluid match, penalty for mismatch)
+      const queryHasSynthetic = rawQuery.includes('synthetic');
+      const queryHasNatural = rawQuery.includes('natural');
+      const queryHasMineral = rawQuery.includes('mineral');
+
+      const rowHasSynthetic = combinedText.includes('synthetic');
+      const rowHasNatural = combinedText.includes('natural');
+      const rowHasMineral = combinedText.includes('mineral');
+
+      // If they asked for synthetic, heavily reward synthetic rows, heavily penalize natural-only rows
+      if (queryHasSynthetic) {
+        if (rowHasSynthetic) score += 100;
+        if (rowHasNatural && !rowHasSynthetic) score -= 100; // It's natural, not synthetic!
+        if (topic.includes('synthetic')) score += 50;
+      }
+      
+      if (queryHasNatural) {
+        if (rowHasNatural) score += 100;
+        if (rowHasSynthetic && !rowHasNatural) score -= 100;
+        if (topic.includes('natural')) score += 50;
+      }
+
+      if (queryHasMineral) {
+        if (rowHasMineral) score += 100;
+        if ((rowHasSynthetic || rowHasNatural) && !rowHasMineral) score -= 100;
+        if (topic.includes('mineral')) score += 50;
+      }
+
+      // 2. Keyword matching
       keywords.forEach(kw => {
-        // Exact standard match gets high priority
-        if (stdNo.includes(kw)) score += 10;
-        // Match in title gets good priority
-        if (stdDoc.includes(kw)) score += 5;
-        // Match in descriptions
-        if (scope.includes(kw)) score += 2;
-        if (notes.includes(kw)) score += 2;
-        if (engDesc.includes(kw)) score += 2;
+        // Skip adding points for fluid types since we handled them above
+        if (kw === 'synthetic' || kw === 'natural' || kw === 'mineral') return;
+
+        let kwScore = 0;
         
-        // Exact phrase match in combined text gives a small boost
-        if (combinedText.includes(query.toLowerCase())) {
-           score += 15;
+        // Exact standard match gets high priority
+        if (stdNo.includes(kw)) kwScore += 50;
+        
+        // Match in title or topic gets good priority
+        if (stdDoc.includes(kw)) kwScore += 20;
+        if (topic.includes(kw)) kwScore += 30;
+
+        // Match in descriptions
+        if (scope.includes(kw)) kwScore += 10;
+        if (notes.includes(kw)) kwScore += 5;
+        if (engDesc.includes(kw)) kwScore += 5;
+        
+        // Multiply by importance
+        if (primaryKeywords.has(kw)) {
+          kwScore *= 3; // Huge boost for specific test parameters (e.g. 'bdv')
+        } else if (genericKeywords.has(kw)) {
+          kwScore *= 0.1; // Drastically reduce value of words like 'test' or 'method'
         }
+
+        score += kwScore;
       });
+
+      // 3. Exact phrase match boosts
+      if (combinedText.includes(rawQuery)) {
+         score += 200;
+      }
 
       return { row, score };
     });
 
-    // Filter out rows with no score and sort by highest score
-    const matches = scoredData.filter(item => item.score > 0).sort((a, b) => b.score - a.score);
+    // Filter out rows with no score (or negative score) and sort
+    const matches = scoredData.filter(item => item.score > 10).sort((a, b) => b.score - a.score);
     
-    // Return top 5 matches to avoid overwhelming
     return matches.slice(0, 5);
   }, [query, masterMatrix]);
 
