@@ -1,0 +1,14 @@
+/* Add custom hover effect for access cards */
+.access-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px rgba(0,0,0,0.06) !important;
+  border-color: var(--sdo-iec) !important;
+}
+
+.access-card:hover h4 {
+  color: var(--sdo-iec) !important;
+}
+
+.access-card:hover svg {
+  color: var(--sdo-iec) !important;
+}
