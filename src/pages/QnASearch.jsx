@@ -32,61 +32,58 @@ export default function QnASearch() {
       const notes = (row['Notes / Applicability'] || '').toLowerCase();
       const engDesc = (row['Engineering Description'] || '').toLowerCase();
       const topic = (row['Topic Category'] || '').toLowerCase();
-      
       const combinedText = `${stdNo} ${stdDoc} ${topic} ${scope} ${notes} ${engDesc}`;
 
-      // 1. Fluid Type Strictness (Massive boost for exact fluid match, penalty for mismatch)
+      // 1. Fluid Type Strictness (Use Topic Category to determine the TRUE subject of the standard)
       const queryHasSynthetic = rawQuery.includes('synthetic');
       const queryHasNatural = rawQuery.includes('natural');
       const queryHasMineral = rawQuery.includes('mineral');
 
-      const rowHasSynthetic = combinedText.includes('synthetic');
-      const rowHasNatural = combinedText.includes('natural');
-      const rowHasMineral = combinedText.includes('mineral');
+      const topicHasSynthetic = topic.includes('synthetic');
+      const topicHasNatural = topic.includes('natural');
+      const topicHasMineral = topic.includes('mineral');
+      
+      const isGeneralStandard = !topicHasSynthetic && !topicHasNatural && !topicHasMineral;
 
-      // If they asked for synthetic, heavily reward synthetic rows, heavily penalize natural-only rows
+      // Strictly evaluate based on the TOPIC, not the description, to avoid "Do not use synthetic" false positives.
       if (queryHasSynthetic) {
-        if (rowHasSynthetic) score += 100;
-        if (rowHasNatural && !rowHasSynthetic) score -= 100; // It's natural, not synthetic!
-        if (topic.includes('synthetic')) score += 50;
+        if (topicHasSynthetic) score += 150; // Explicitly synthetic
+        else if (isGeneralStandard) score += 30; // General standards (like BDV IEC 60156) apply to synthetic too
+        else if (topicHasNatural || topicHasMineral) score -= 200; // Explicitly about something else
       }
       
       if (queryHasNatural) {
-        if (rowHasNatural) score += 100;
-        if (rowHasSynthetic && !rowHasNatural) score -= 100;
-        if (topic.includes('natural')) score += 50;
+        if (topicHasNatural) score += 150;
+        else if (isGeneralStandard) score += 30;
+        else if (topicHasSynthetic || topicHasMineral) score -= 200;
       }
 
       if (queryHasMineral) {
-        if (rowHasMineral) score += 100;
-        if ((rowHasSynthetic || rowHasNatural) && !rowHasMineral) score -= 100;
-        if (topic.includes('mineral')) score += 50;
+        if (topicHasMineral) score += 150;
+        else if (isGeneralStandard) score += 30;
+        else if (topicHasSynthetic || topicHasNatural) score -= 200;
       }
 
       // 2. Keyword matching
       keywords.forEach(kw => {
-        // Skip adding points for fluid types since we handled them above
+        // Skip fluid types since we handled them structurally above
         if (kw === 'synthetic' || kw === 'natural' || kw === 'mineral') return;
 
         let kwScore = 0;
         
-        // Exact standard match gets high priority
         if (stdNo.includes(kw)) kwScore += 50;
-        
-        // Match in title or topic gets good priority
         if (stdDoc.includes(kw)) kwScore += 20;
         if (topic.includes(kw)) kwScore += 30;
 
-        // Match in descriptions
-        if (scope.includes(kw)) kwScore += 10;
-        if (notes.includes(kw)) kwScore += 5;
-        if (engDesc.includes(kw)) kwScore += 5;
+        // Give much lower weight to description matches to prevent generic word bloat
+        if (scope.includes(kw)) kwScore += 5;
+        if (notes.includes(kw)) kwScore += 2;
+        if (engDesc.includes(kw)) kwScore += 1;
         
-        // Multiply by importance
         if (primaryKeywords.has(kw)) {
-          kwScore *= 3; // Huge boost for specific test parameters (e.g. 'bdv')
+          kwScore *= 5; // Massive boost for specific test parameters (e.g. 'bdv')
         } else if (genericKeywords.has(kw)) {
-          kwScore *= 0.1; // Drastically reduce value of words like 'test' or 'method'
+          kwScore *= 0.1; // Crush the value of words like 'test' or 'method'
         }
 
         score += kwScore;
@@ -100,7 +97,7 @@ export default function QnASearch() {
       return { row, score };
     });
 
-    // Filter out rows with no score (or negative score) and sort
+    // Filter out rows with low scores
     const matches = scoredData.filter(item => item.score > 10).sort((a, b) => b.score - a.score);
     
     return matches.slice(0, 5);
