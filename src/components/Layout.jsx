@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
-import { LayoutDashboard, Table, Library, ArrowRightLeft, Beaker, Shield, Wrench, FileArchive, History, Zap, FileText } from 'lucide-react';
+import { LayoutDashboard, Table, Library, ArrowRightLeft, Beaker, Shield, Wrench, FileArchive, History, Zap, FileText, MessageCircle } from 'lucide-react';
 
 export default function Layout() {
   return (
@@ -42,6 +42,9 @@ export default function Layout() {
           </NavLink>
           <NavLink to="/tds" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
             <FileText /> TDS - SOTL
+          </NavLink>
+          <NavLink to="/qna" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
+            <MessageCircle /> Q&A Search Engine
           </NavLink>
         </nav>
       </aside>

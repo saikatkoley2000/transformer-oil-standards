@@ -8,6 +8,7 @@ import CrossReference from './pages/CrossReference';
 import { TestMethods, SpecStandards, MaintenanceSampling, InternalSpecs, HistoricalLegacy } from './pages/FilteredPages';
 import QuickReference from './pages/QuickReference';
 import TdsList from './pages/TdsList';
+import QnASearch from './pages/QnASearch';
 
 function App() {
   return (
@@ -25,6 +26,7 @@ function App() {
           <Route path="historical" element={<HistoricalLegacy />} />
           <Route path="quick-ref" element={<QuickReference />} />
           <Route path="tds" element={<TdsList />} />
+          <Route path="qna" element={<QnASearch />} />
         </Route>
       </Routes>
     </BrowserRouter>
