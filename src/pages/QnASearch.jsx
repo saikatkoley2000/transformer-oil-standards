@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Send, Bot, User, Loader2, AlertCircle } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import rehypeRaw from 'rehype-raw';
 
 export default function QnASearch() {
   const [messages, setMessages] = useState([
@@ -104,7 +105,10 @@ export default function QnASearch() {
                 {msg.role === 'user' ? (
                   <p style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{msg.content}</p>
                 ) : (
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  <ReactMarkdown 
+                    remarkPlugins={[remarkGfm]}
+                    rehypePlugins={[rehypeRaw]}
+                  >
                     {msg.content}
                   </ReactMarkdown>
                 )}
