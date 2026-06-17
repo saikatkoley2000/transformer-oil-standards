@@ -159,7 +159,7 @@ export default function QnASearch() {
             </button>
           </form>
           <div style={{ textAlign: 'center', marginTop: '12px', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-            AI Assistant powered by Google Gemini 1.5 Flash. Engineering answers are generated from SOTL's trusted database.
+            AI Assistant powered by Google Gemini 2.5 Flash. Engineering answers are generated from SOTL's trusted database.
           </div>
         </div>
 

@@ -124,7 +124,7 @@ Flash point test: ISO 2719 (Pensky-Martens Closed Cup) — for transport classif
 Never say "I don't know" — if the answer is outside the standards database, say "This parameter is not covered by the transformer oil standards in the SOTL reference library. Please check with the R&D team for guidance."
 `;
 
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`, {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${API_KEY}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
