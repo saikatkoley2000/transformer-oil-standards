@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Loader2, AlertCircle } from 'lucide-react';
+import { Send, Bot, User, Loader2, AlertCircle, Maximize, Minimize } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
@@ -14,6 +14,7 @@ export default function QnASearch() {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [isFullScreen, setIsFullScreen] = useState(false);
   const messagesEndRef = useRef(null);
 
   const scrollToBottom = () => {
@@ -74,13 +75,41 @@ export default function QnASearch() {
   };
 
   return (
-    <div className="qna-page" style={{ height: 'calc(100vh - 100px)', display: 'flex', flexDirection: 'column', maxWidth: '1000px', margin: '0 auto' }}>
-      <div className="page-header" style={{ textAlign: 'center', marginBottom: '20px', flexShrink: 0 }}>
-        <h2>SOTL Standards Expert</h2>
-        <p>AI-Powered Chat Assistant for Transformer Fluids</p>
-      </div>
+    <div className="qna-page" style={{ 
+      ...(isFullScreen ? {
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 9999,
+        backgroundColor: '#f8fafc',
+        padding: '24px',
+        display: 'flex',
+        flexDirection: 'column',
+      } : {
+        height: 'calc(100vh - 100px)', display: 'flex', flexDirection: 'column', maxWidth: '1000px', margin: '0 auto'
+      })
+    }}>
+      {!isFullScreen && (
+        <div className="page-header" style={{ textAlign: 'center', marginBottom: '20px', flexShrink: 0 }}>
+          <h2>SOTL Standards Expert</h2>
+          <p>AI-Powered Chat Assistant for Transformer Fluids</p>
+        </div>
+      )}
 
-      <div style={{ flexGrow: 1, backgroundColor: '#fff', borderRadius: '12px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 8px 24px rgba(0,0,0,0.04)' }}>
+      <div style={{ flexGrow: 1, backgroundColor: '#fff', borderRadius: '12px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 8px 24px rgba(0,0,0,0.04)', position: 'relative' }}>
+        
+        {/* Full screen toggle button */}
+        <button 
+          onClick={() => setIsFullScreen(!isFullScreen)}
+          style={{ position: 'absolute', top: '16px', right: '16px', zIndex: 10, background: 'white', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', transition: 'background-color 0.2s' }}
+          onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#f1f5f9'}
+          onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'white'}
+          title={isFullScreen ? "Exit Full Screen" : "Full Screen"}
+        >
+          {isFullScreen ? <Minimize size={20} /> : <Maximize size={20} />}
+        </button>
         
         {/* Chat History Area */}
         <div style={{ flexGrow: 1, overflowY: 'auto', padding: '24px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -96,7 +125,7 @@ export default function QnASearch() {
               </div>
 
               <div style={{ 
-                maxWidth: '80%', padding: '16px', borderRadius: '12px',
+                maxWidth: msg.role === 'user' ? '80%' : '95%', padding: '20px', borderRadius: '12px', overflowX: 'auto',
                 backgroundColor: msg.role === 'user' ? '#f0f4f8' : '#fff',
                 border: msg.role === 'user' ? 'none' : '1px solid var(--border-color)',
                 color: 'var(--text-primary)',
