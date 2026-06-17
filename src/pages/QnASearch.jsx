@@ -45,7 +45,17 @@ export default function QnASearch() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to connect to the AI Assistant. Please try again.');
+        let errMessage = `Error ${response.status}: ${response.statusText}`;
+        try {
+          const errData = await response.json();
+          if (errData && errData.error) errMessage += ` - ${errData.error}`;
+        } catch(e) {
+          try {
+            const errText = await response.text();
+            errMessage += ` - ${errText.substring(0, 100)}`;
+          } catch(e2) {}
+        }
+        throw new Error(errMessage);
       }
 
       const data = await response.json();
