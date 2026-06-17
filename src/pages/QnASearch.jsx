@@ -1,210 +1,159 @@
-import React, { useState, useMemo } from 'react';
-import standardsData from '../data/standards_data.json';
-import { Search, BookOpen, AlertCircle, FileText } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Send, Bot, User, Loader2, AlertCircle } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 export default function QnASearch() {
-  const masterMatrix = standardsData['Master Matrix'] || [];
-  const [query, setQuery] = useState('');
-  const [hasSearched, setHasSearched] = useState(false);
+  const [messages, setMessages] = useState([
+    {
+      role: 'assistant',
+      content: 'Hello! I am the SOTL Transformer Oil Standards Expert. I can answer questions about specifications, test methods, maintenance limits, and technical differences between Mineral Oil, Synthetic Ester, and Natural Ester fluids. How can I help you today?'
+    }
+  ]);
+  const [input, setInput] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const messagesEndRef = useRef(null);
 
-  // Stop words to filter out common conversational words from query
-  const stopWords = new Set(['what', 'is', 'the', 'for', 'in', 'of', 'and', 'to', 'a', 'an', 'how', 'do', 'i', 'find', 'which', 'standard', 'are', 'about', 'can', 'you', 'tell', 'me']);
-  
-  // High-value keywords that should heavily influence results
-  const primaryKeywords = new Set(['synthetic', 'natural', 'mineral', 'bdv', 'dga', 'ift', 'acidity', 'viscosity', 'water', 'moisture', 'flash', 'fire', 'pour', 'density', 'gassing', 'pcb', 'sulphur']);
-  const genericKeywords = new Set(['test', 'method', 'oil', 'fluid', 'liquid', 'equipment', 'transformer']);
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
 
-  const searchResults = useMemo(() => {
-    if (!query.trim()) return [];
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
 
-    const rawQuery = query.toLowerCase();
-    const rawKeywords = rawQuery.split(/[\s,?\.]+/);
-    const keywords = rawKeywords.filter(k => k.length > 2 && !stopWords.has(k));
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!input.trim() || isLoading) return;
 
-    if (keywords.length === 0) return [];
+    const userMessage = { role: 'user', content: input.trim() };
+    const newMessages = [...messages, userMessage];
+    
+    setMessages(newMessages);
+    setInput('');
+    setIsLoading(true);
+    setError(null);
 
-    const scoredData = masterMatrix.map(row => {
-      let score = 0;
-      
-      const stdNo = (row['Std. No.'] || '').toLowerCase();
-      const stdDoc = (row['Standard / Document'] || '').toLowerCase();
-      const scope = (row['Scope / Key Parameter'] || '').toLowerCase();
-      const notes = (row['Notes / Applicability'] || '').toLowerCase();
-      const engDesc = (row['Engineering Description'] || '').toLowerCase();
-      const topic = (row['Topic Category'] || '').toLowerCase();
-      const combinedText = `${stdNo} ${stdDoc} ${topic} ${scope} ${notes} ${engDesc}`;
-
-      // 1. Fluid Type Strictness (Use Topic Category to determine the TRUE subject of the standard)
-      const queryHasSynthetic = rawQuery.includes('synthetic');
-      const queryHasNatural = rawQuery.includes('natural');
-      const queryHasMineral = rawQuery.includes('mineral');
-
-      const topicHasSynthetic = topic.includes('synthetic');
-      const topicHasNatural = topic.includes('natural');
-      const topicHasMineral = topic.includes('mineral');
-      
-      const isGeneralStandard = !topicHasSynthetic && !topicHasNatural && !topicHasMineral;
-
-      // Strictly evaluate based on the TOPIC, not the description, to avoid "Do not use synthetic" false positives.
-      if (queryHasSynthetic) {
-        if (topicHasSynthetic) score += 150; // Explicitly synthetic
-        else if (isGeneralStandard) score += 30; // General standards (like BDV IEC 60156) apply to synthetic too
-        else if (topicHasNatural || topicHasMineral) score -= 200; // Explicitly about something else
-      }
-      
-      if (queryHasNatural) {
-        if (topicHasNatural) score += 150;
-        else if (isGeneralStandard) score += 30;
-        else if (topicHasSynthetic || topicHasMineral) score -= 200;
-      }
-
-      if (queryHasMineral) {
-        if (topicHasMineral) score += 150;
-        else if (isGeneralStandard) score += 30;
-        else if (topicHasSynthetic || topicHasNatural) score -= 200;
-      }
-
-      // 2. Keyword matching
-      keywords.forEach(kw => {
-        // Skip fluid types since we handled them structurally above
-        if (kw === 'synthetic' || kw === 'natural' || kw === 'mineral') return;
-
-        let kwScore = 0;
-        
-        if (stdNo.includes(kw)) kwScore += 50;
-        if (stdDoc.includes(kw)) kwScore += 20;
-        if (topic.includes(kw)) kwScore += 30;
-
-        // Give much lower weight to description matches to prevent generic word bloat
-        if (scope.includes(kw)) kwScore += 5;
-        if (notes.includes(kw)) kwScore += 2;
-        if (engDesc.includes(kw)) kwScore += 1;
-        
-        if (primaryKeywords.has(kw)) {
-          kwScore *= 5; // Massive boost for specific test parameters (e.g. 'bdv')
-        } else if (genericKeywords.has(kw)) {
-          kwScore *= 0.1; // Crush the value of words like 'test' or 'method'
-        }
-
-        score += kwScore;
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ messages: newMessages }),
       });
 
-      // 3. Exact phrase match boosts
-      if (combinedText.includes(rawQuery)) {
-         score += 200;
+      if (!response.ok) {
+        throw new Error('Failed to connect to the AI Assistant. Please try again.');
       }
 
-      return { row, score };
-    });
-
-    // Filter out rows with low scores
-    const matches = scoredData.filter(item => item.score > 10).sort((a, b) => b.score - a.score);
-    
-    return matches.slice(0, 5);
-  }, [query, masterMatrix]);
-
-  const handleSearch = (e) => {
-    e.preventDefault();
-    if (query.trim()) {
-      setHasSearched(true);
-    } else {
-      setHasSearched(false);
+      const data = await response.json();
+      
+      setMessages([...newMessages, { role: 'assistant', content: data.text }]);
+    } catch (err) {
+      console.error('Chat error:', err);
+      setError(err.message);
+      // Remove the user's message if it failed, so they can try again
+      setMessages(messages);
+      setInput(userMessage.content);
+    } finally {
+      setIsLoading(false);
     }
   };
 
   return (
-    <div className="qna-page">
-      <div className="page-header" style={{ textAlign: 'center', marginBottom: '40px' }}>
-        <h2>Intelligent Q&A Search</h2>
-        <p>Ask a question about transformer oil specifications, tests, or maintenance.</p>
+    <div className="qna-page" style={{ height: 'calc(100vh - 100px)', display: 'flex', flexDirection: 'column', maxWidth: '1000px', margin: '0 auto' }}>
+      <div className="page-header" style={{ textAlign: 'center', marginBottom: '20px', flexShrink: 0 }}>
+        <h2>SOTL Standards Expert</h2>
+        <p>AI-Powered Chat Assistant for Transformer Fluids</p>
       </div>
 
-      <div style={{ maxWidth: '700px', margin: '0 auto 40px auto' }}>
-        <form onSubmit={handleSearch} style={{ position: 'relative', width: '100%', display: 'flex', gap: '12px' }}>
-          <div style={{ position: 'relative', flexGrow: 1 }}>
-            <Search size={24} style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-            <input 
-              type="text" 
-              className="search-input" 
-              placeholder="e.g. What is the standard for natural ester?" 
-              value={query}
-              onChange={e => {
-                setQuery(e.target.value);
-                if (e.target.value === '') setHasSearched(false);
-              }}
-              style={{ padding: '16px 16px 16px 50px', width: '100%', fontSize: '1.1rem', borderRadius: '8px', border: '1px solid var(--border-color)', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}
-            />
-          </div>
-          <button type="submit" className="action-btn primary" style={{ padding: '0 24px', fontSize: '1.05rem', height: 'auto', display: 'flex', alignItems: 'center' }}>
-            Search
-          </button>
-        </form>
-      </div>
+      <div style={{ flexGrow: 1, backgroundColor: '#fff', borderRadius: '12px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 8px 24px rgba(0,0,0,0.04)' }}>
+        
+        {/* Chat History Area */}
+        <div style={{ flexGrow: 1, overflowY: 'auto', padding: '24px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          {messages.map((msg, idx) => (
+            <div key={idx} style={{ display: 'flex', gap: '16px', flexDirection: msg.role === 'user' ? 'row-reverse' : 'row' }}>
+              
+              <div style={{ 
+                width: '40px', height: '40px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                backgroundColor: msg.role === 'user' ? 'var(--sdo-astm)' : 'var(--sdo-iec)',
+                color: 'white'
+              }}>
+                {msg.role === 'user' ? <User size={20} /> : <Bot size={20} />}
+              </div>
 
-      {hasSearched && (
-        <div style={{ maxWidth: '800px', margin: '0 auto' }}>
-          <h3 style={{ marginBottom: '24px', fontSize: '1.2rem', color: 'var(--text-secondary)' }}>
-            Search Results
-          </h3>
-
-          {searchResults.length === 0 ? (
-            <div className="empty-state" style={{ textAlign: 'center', padding: '60px 20px', backgroundColor: 'var(--bg-secondary)', borderRadius: '12px', border: '1px dashed var(--border-color)' }}>
-              <AlertCircle size={48} style={{ color: 'var(--text-muted)', margin: '0 auto 16px auto', display: 'block' }} />
-              <h3 style={{ fontSize: '1.25rem', marginBottom: '8px', color: 'var(--text-primary)' }}>No direct answers found in the database.</h3>
-              <p style={{ color: 'var(--text-secondary)', fontSize: '1.05rem' }}>
-                You may search relevant Standard for the same.
-              </p>
+              <div style={{ 
+                maxWidth: '80%', padding: '16px', borderRadius: '12px',
+                backgroundColor: msg.role === 'user' ? '#f0f4f8' : '#fff',
+                border: msg.role === 'user' ? 'none' : '1px solid var(--border-color)',
+                color: 'var(--text-primary)',
+                boxShadow: msg.role === 'user' ? 'none' : '0 2px 8px rgba(0,0,0,0.02)'
+              }} className="markdown-body">
+                {msg.role === 'user' ? (
+                  <p style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{msg.content}</p>
+                ) : (
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {msg.content}
+                  </ReactMarkdown>
+                )}
+              </div>
             </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-              {searchResults.map((result, idx) => {
-                const { row, score } = result;
-                return (
-                  <div key={idx} className="access-card" style={{ padding: '24px', backgroundColor: 'white', borderRadius: '12px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '16px', textDecoration: 'none' }}>
-                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px' }}>
-                      <div style={{ backgroundColor: 'var(--bg-secondary)', padding: '12px', borderRadius: '8px' }}>
-                        <BookOpen size={24} style={{ color: 'var(--sdo-iec)' }} />
-                      </div>
-                      <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '4px' }}>
-                          <span style={{ fontWeight: 'bold', color: 'var(--sdo-iec)', fontSize: '1.1rem' }}>{row['Std. No.'] || 'Standard'}</span>
-                          <span style={{ fontSize: '0.8rem', padding: '2px 8px', backgroundColor: 'var(--bg-secondary)', borderRadius: '12px', color: 'var(--text-secondary)' }}>
-                            Match Score: {score}
-                          </span>
-                        </div>
-                        <h4 style={{ fontSize: '1.05rem', color: 'var(--text-primary)', marginBottom: '8px', fontWeight: 600 }}>{row['Standard / Document'] || '—'}</h4>
-                      </div>
-                    </div>
+          ))}
 
-                    {row['Scope / Key Parameter'] && (
-                      <div style={{ paddingLeft: '52px' }}>
-                        <h5 style={{ fontSize: '0.85rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>Scope / Key Parameter</h5>
-                        <p style={{ color: 'var(--text-secondary)', lineHeight: '1.5' }}>{row['Scope / Key Parameter']}</p>
-                      </div>
-                    )}
-                    
-                    {row['Engineering Description'] && (
-                      <div style={{ paddingLeft: '52px' }}>
-                        <h5 style={{ fontSize: '0.85rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>Engineering Description</h5>
-                        <p style={{ color: 'var(--text-primary)', lineHeight: '1.6', backgroundColor: '#f8fafc', padding: '12px', borderRadius: '6px', borderLeft: '3px solid var(--sdo-iec)' }}>
-                          {row['Engineering Description']}
-                        </p>
-                      </div>
-                    )}
-
-                    {row['Notes / Applicability'] && (
-                      <div style={{ paddingLeft: '52px' }}>
-                        <h5 style={{ fontSize: '0.85rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>Notes</h5>
-                        <p style={{ color: 'var(--text-secondary)', lineHeight: '1.5', fontSize: '0.9rem' }}>{row['Notes / Applicability']}</p>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+          {isLoading && (
+            <div style={{ display: 'flex', gap: '16px', flexDirection: 'row' }}>
+              <div style={{ width: '40px', height: '40px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, backgroundColor: 'var(--sdo-iec)', color: 'white' }}>
+                <Bot size={20} />
+              </div>
+              <div style={{ padding: '16px', borderRadius: '12px', border: '1px solid var(--border-color)', backgroundColor: '#fff', display: 'flex', alignItems: 'center', gap: '12px', color: 'var(--text-muted)' }}>
+                <Loader2 className="animate-spin" size={18} />
+                <span>Scanning standards database...</span>
+              </div>
             </div>
           )}
+
+          {error && (
+            <div style={{ padding: '16px', backgroundColor: '#fee2e2', color: '#b91c1c', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '12px', margin: '0 auto' }}>
+              <AlertCircle size={20} />
+              <span>{error}</span>
+            </div>
+          )}
+          
+          <div ref={messagesEndRef} />
         </div>
-      )}
+
+        {/* Input Area */}
+        <div style={{ padding: '16px 24px', backgroundColor: 'var(--bg-secondary)', borderTop: '1px solid var(--border-color)' }}>
+          <form onSubmit={handleSubmit} style={{ display: 'flex', gap: '12px' }}>
+            <input 
+              type="text" 
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="Ask about BDV, Acidity, Ester differences, etc..."
+              disabled={isLoading}
+              style={{ flexGrow: 1, padding: '14px 20px', borderRadius: '24px', border: '1px solid var(--border-color)', fontSize: '1rem', outline: 'none' }}
+            />
+            <button 
+              type="submit" 
+              disabled={isLoading || !input.trim()}
+              style={{ 
+                backgroundColor: input.trim() && !isLoading ? 'var(--sdo-iec)' : 'var(--border-color)', 
+                color: 'white', border: 'none', borderRadius: '24px', padding: '0 24px', cursor: input.trim() && !isLoading ? 'pointer' : 'not-allowed',
+                display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 500, transition: 'background-color 0.2s'
+              }}
+            >
+              <Send size={18} />
+              <span>Send</span>
+            </button>
+          </form>
+          <div style={{ textAlign: 'center', marginTop: '12px', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+            AI Assistant powered by Google Gemini 1.5 Flash. Engineering answers are generated from SOTL's trusted database.
+          </div>
+        </div>
+
+      </div>
     </div>
   );
 }
