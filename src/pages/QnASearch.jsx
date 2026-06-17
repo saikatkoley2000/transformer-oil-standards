@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Loader2, AlertCircle, Copy, Check } from 'lucide-react';
+import { Send, Bot, User, Loader2, AlertCircle } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
@@ -13,20 +13,7 @@ export default function QnASearch() {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [copiedIndex, setCopiedIndex] = useState(null);
-
-  const handleCopy = (idx, content) => {
-    let textToCopy = '';
-    if (idx > 0 && messages[idx - 1].role === 'user') {
-      textToCopy += `Question: ${messages[idx - 1].content}\n\n`;
-    }
-    textToCopy += `Answer:\n${content}`;
-    
-    navigator.clipboard.writeText(textToCopy).then(() => {
-      setCopiedIndex(idx);
-      setTimeout(() => setCopiedIndex(null), 2000);
-    }).catch(err => console.error('Failed to copy text: ', err));
-  };
+  const messagesEndRef = useRef(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -117,22 +104,9 @@ export default function QnASearch() {
                 {msg.role === 'user' ? (
                   <p style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{msg.content}</p>
                 ) : (
-                  <div>
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                      {msg.content}
-                    </ReactMarkdown>
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '16px', borderTop: '1px solid var(--border-color)', paddingTop: '12px' }}>
-                      <button 
-                        onClick={() => handleCopy(idx, msg.content)}
-                        style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: copiedIndex === idx ? '#10b981' : 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem', fontWeight: 500, padding: '4px 8px', borderRadius: '4px', transition: 'background-color 0.2s' }}
-                        onMouseOver={(e) => { if(copiedIndex !== idx) e.currentTarget.style.backgroundColor = '#f1f5f9'; }}
-                        onMouseOut={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
-                      >
-                        {copiedIndex === idx ? <Check size={16} /> : <Copy size={16} />}
-                        {copiedIndex === idx ? 'Copied Q&A!' : 'Copy Q&A'}
-                      </button>
-                    </div>
-                  </div>
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {msg.content}
+                  </ReactMarkdown>
                 )}
               </div>
             </div>
